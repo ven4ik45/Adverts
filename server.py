@@ -62,15 +62,15 @@ class AdvertsView(MethodView):
             return jsonify(advert.json)
         else:
             qs = dict(request.args)
-            for k, v in qs.items():
-                if k == "all" and v == ("true" or True):
+            for key, value in qs.items():
+                if key == "all" and value == ("true" or True):
                     all_advert = Session().query(Adverts, Adverts.id, Adverts.title).all()
-                    a = {}
+                    adverts = {}
                     for i in all_advert:
-                        a[i[1]] = (i[2])
-                    if len(a) == 0:
+                        adverts[i[1]] = (i[2])
+                    if len(adverts) == 0:
                         raise HttpError(404, "No adverts created yet")
-                    return a
+                    return adverts
 
     def post(self):
         json_data = request.json
