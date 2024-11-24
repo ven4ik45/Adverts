@@ -1,3 +1,4 @@
+import json
 
 import flask
 from flask import Flask
@@ -5,7 +6,6 @@ from flask import jsonify, request
 from flask.views import MethodView
 from models import Adverts, Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select
 
 app = Flask("adverts")
 
@@ -50,9 +50,8 @@ def create_advert(advert: Adverts):
 def get_advert(advert_id: int):
     advert = request.session.get(Adverts, advert_id)
     if advert is None:
-        raise HttpError(404, "advert not found")
+        raise HttpError(status_code=404, error_msg="advert not found")
     return advert
-
 
 
 class AdvertsView(MethodView):
@@ -61,30 +60,26 @@ class AdvertsView(MethodView):
             advert = get_advert(advert_id)
             return jsonify(advert.json)
         else:
-            qs = dict(request.args)
-            for key, value in qs.items():
-                if key == "all" and value == ("true" or True):
-                    all_advert = Session().query(Adverts, Adverts.id, Adverts.title).all()
-                    adverts = {}
-                    for i in all_advert:
-                        adverts[i[1]] = (i[2])
-                    if len(adverts) == 0:
-                        raise HttpError(404, "No adverts created yet")
-                    return adverts
+            all_advert = request.session.query(Adverts).all()
+            adverts = []
+            if not all_advert:
+                raise HttpError(404, "No adverts created yet")
+            for value in all_advert:
+                advert = {"title": value.json["title"], "id": value.json["id"]}
+                adverts.append(advert)
+            return jsonify(adverts)
 
     def post(self):
         json_data = request.json
         advert = Adverts(**json_data)
         advert = create_advert(advert)
-        return jsonify({"id": advert.id, "date": advert.data_create})
+        return jsonify({"status": "created", "id": advert.id, "date": advert.title})
 
     def delete(self, advert_id: int):
         advert = get_advert(advert_id)
         request.session.delete(advert)
         request.session.commit()
         return jsonify({"status": "deleted"})
-
-
 
 
 advert_view = AdvertsView.as_view("adverts")
