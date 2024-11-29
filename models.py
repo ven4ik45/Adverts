@@ -24,7 +24,7 @@ class Base(DeclarativeBase):
     pass
 
 
-class Adverts(Base):
+class Advert(Base):
     __tablename__ = "app_adverts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -34,7 +34,7 @@ class Adverts(Base):
     data_create: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     @property
-    def json(self):
+    def json_model(self):
         return {
             "id": self.id,
             "title": self.title,

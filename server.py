@@ -1,17 +1,17 @@
-import json
-
 import flask
 from flask import Flask
 from flask import jsonify, request
 from flask.views import MethodView
-from models import Adverts, Session
+from models import Advert, Session
 from sqlalchemy.exc import IntegrityError
+from schema import CreateAdvert
+from pydantic import ValidationError
 
 app = Flask("adverts")
 
 
 class HttpError(Exception):
-    def __init__(self, status_code: int, error_msg: str|dict|list):
+    def __init__(self, status_code: int, error_msg: str | dict | list):
         self.status_code = status_code
         self.error_msg = error_msg
 
@@ -21,6 +21,22 @@ def http_error_handler(error: HttpError):
     http_response = jsonify({"status": "error", "msg": error.error_msg})
     http_response.status = error.status_code
     return http_response
+
+def validate_fields(
+        json_data: dict,
+        schema_cls: type[CreateAdvert]
+):
+    try:
+        return schema_cls(**json_data).dict(exclude_unset=True)
+    except ValidationError as err:
+        errors = err.errors()
+        for error in errors:
+            print()
+            error.pop("ctx", None)
+        raise HttpError(400, errors)
+
+
+
 
 
 @app.before_request
@@ -35,7 +51,7 @@ def after_request(http_response: flask.Response):
     return http_response
 
 
-def create_advert(advert: Adverts):
+def create_advert(advert: Advert):
     try:
         request.session.add(advert)
         request.session.commit()
@@ -48,32 +64,32 @@ def create_advert(advert: Adverts):
 
 
 def get_advert(advert_id: int):
-    advert = request.session.get(Adverts, advert_id)
+    advert = request.session.get(Advert, advert_id)
     if advert is None:
         raise HttpError(status_code=404, error_msg="advert not found")
     return advert
 
 
-class AdvertsView(MethodView):
+class AdvertView(MethodView):
     def get(self, advert_id: int = None):
         if advert_id:
             advert = get_advert(advert_id)
-            return jsonify(advert.json)
+            return jsonify(advert.json_model)
         else:
-            all_advert = request.session.query(Adverts).all()
+            all_advert = request.session.query(Advert).all()
             adverts = []
             if not all_advert:
                 raise HttpError(404, "No adverts created yet")
-            for value in all_advert:
-                advert = {"title": value.json["title"], "id": value.json["id"]}
+            for advert in all_advert:
+                advert = {"title": advert.json_model["title"], "id": advert.json_model["id"]}
                 adverts.append(advert)
             return jsonify(adverts)
 
     def post(self):
-        json_data = request.json
-        advert = Adverts(**json_data)
+        json_data = validate_fields(request.json, CreateAdvert)
+        advert = Advert(**json_data)
         advert = create_advert(advert)
-        return jsonify({"status": "created", "id": advert.id, "date": advert.title})
+        return jsonify({"status": "created", "id": advert.id})
 
     def delete(self, advert_id: int):
         advert = get_advert(advert_id)
@@ -82,10 +98,10 @@ class AdvertsView(MethodView):
         return jsonify({"status": "deleted"})
 
 
-advert_view = AdvertsView.as_view("adverts")
+advert_view = AdvertView.as_view("adverts")
 
 app.add_url_rule("/create_advert", view_func=advert_view, methods=["POST"])
-app.add_url_rule("/list_adverts", view_func=advert_view, methods=["GET"])
+app.add_url_rule("/adverts", view_func=advert_view, methods=["GET"])
 app.add_url_rule("/advert/<int:advert_id>", view_func=advert_view, methods=["GET", "DELETE"])
 
 
