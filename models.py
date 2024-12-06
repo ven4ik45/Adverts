@@ -2,6 +2,7 @@ from datetime import datetime
 from decouple import config
 
 from sqlalchemy import create_engine, Integer, String, DateTime, func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, mapped_column, Mapped
 from atexit import register
 
@@ -17,7 +18,14 @@ PG_DSN = f"postgresql://" \
 
 engine = create_engine(PG_DSN)
 
-Session = sessionmaker(bind=engine)
+def get_session():
+    try:
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        return session
+    except SQLAlchemyError as error:
+        print(f"An error occurred while creating the session: {error}")
+        raise
 
 
 class Base(DeclarativeBase):

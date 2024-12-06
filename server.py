@@ -2,9 +2,9 @@ import flask
 from flask import Flask
 from flask import jsonify, request
 from flask.views import MethodView
-from models import Advert, Session
+from models import Advert, get_session
 from sqlalchemy.exc import IntegrityError
-from schema import CreateAdvert
+from schema import CreateAdvert, UpdateAdvert
 from pydantic import ValidationError
 
 app = Flask("adverts")
@@ -24,7 +24,7 @@ def http_error_handler(error: HttpError):
 
 def validate_fields(
         json_data: dict,
-        schema_cls: type[CreateAdvert]
+        schema_cls: type[CreateAdvert] | type[UpdateAdvert]
 ):
     try:
         return schema_cls(**json_data).dict(exclude_unset=True)
@@ -36,12 +36,9 @@ def validate_fields(
         raise HttpError(400, errors)
 
 
-
-
-
 @app.before_request
 def before_request():
-    session = Session()
+    session = get_session()
     request.session = session
 
 
@@ -91,6 +88,15 @@ class AdvertView(MethodView):
         advert = create_advert(advert)
         return jsonify({"status": "created", "id": advert.id})
 
+    def patch(self, advert_id):
+        json_data = validate_fields(request.json, UpdateAdvert)
+        advert = get_advert(advert_id)
+
+        for field, value in json_data.items():
+            setattr(advert, field, value)
+        advert = create_advert(advert)
+        return jsonify(advert.json_model)
+
     def delete(self, advert_id: int):
         advert = get_advert(advert_id)
         request.session.delete(advert)
@@ -102,7 +108,11 @@ advert_view = AdvertView.as_view("adverts")
 
 app.add_url_rule("/create_advert", view_func=advert_view, methods=["POST"])
 app.add_url_rule("/adverts", view_func=advert_view, methods=["GET"])
-app.add_url_rule("/advert/<int:advert_id>", view_func=advert_view, methods=["GET", "DELETE"])
+app.add_url_rule(
+    rule="/advert/<int:advert_id>",
+    view_func=advert_view,
+    methods=["GET", "PATCH", "DELETE"]
+)
 
 
 app.run()
